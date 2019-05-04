@@ -1,19 +1,21 @@
 ﻿using System;
+using System.Linq;
 
 public static class DifferenceOfSquares
 {
-    public static int CalculateSquareOfSum(int max)
+    public static int CalculateSquareOfSum(int n)
     {
-        throw new NotImplementedException("You need to implement this function.");
+        return n * n * (n + 1) * (n + 1) / 4;
+
     }
 
-    public static int CalculateSumOfSquares(int max)
+    public static int CalculateSumOfSquares(int n)
     {
-        throw new NotImplementedException("You need to implement this function.");
+        return n * (n + 1) * (2 * n + 1) / 6;
     }
 
     public static int CalculateDifferenceOfSquares(int max)
     {
-        throw new NotImplementedException("You need to implement this function.");
+        return CalculateSquareOfSum(max) - CalculateSumOfSquares(max);
     }
 }
