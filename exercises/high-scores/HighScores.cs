@@ -1,31 +1,33 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 
 public class HighScores
 {
+    private List<int> _scoreList = new List<int>();
+
     public HighScores(List<int> list)
     {
-        throw new NotImplementedException();
+        _scoreList = list;
     }
 
     public List<int> Scores()
     {
-        throw new NotImplementedException();
+        return _scoreList;
     }
 
     public int Latest()
     {
-        throw new NotImplementedException();
+        return _scoreList.Last();
     }
 
     public int PersonalBest()
     {
-        throw new NotImplementedException();
+        return _scoreList.Max();
     }
 
     public List<int> PersonalTopThree()
     {
-        throw new NotImplementedException();
+        var count = _scoreList.Count < 3 ? _scoreList.Count : 3;
+        return _scoreList.OrderByDescending(l => l).Take(count).ToList();
     }
 }
