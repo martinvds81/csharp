@@ -4,6 +4,20 @@ public static class ReverseString
 {
     public static string Reverse(string input)
     {
-        throw new NotImplementedException("You need to implement this function.");
+        // Handle empty string
+        if(string.IsNullOrWhiteSpace(input))
+        {
+            return input;
+        }
+
+        var chars = input.ToCharArray();
+        var charsReversed = new char[chars.Length];
+
+        for (int i = input.Length - 1; i >= 0; i--)
+        {
+            charsReversed[(input.Length - 1) - i] = chars[i];
+        }
+
+        return string.Join("", charsReversed);
     }
 }
