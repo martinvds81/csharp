@@ -1,7 +1,9 @@
 ﻿public static class TwoFer
 {
-    public static string Speak()
+    public static string Speak(string givenName = "")
     {
-        throw new NotImplementedException("You need to implement this function.");
+        givenName = (string.IsNullOrEmpty(givenName)) ? "you" : givenName;
+
+        return $"One for {givenName}, one for me.";
     }
 }
