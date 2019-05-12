@@ -2,28 +2,67 @@
 
 public class CircularBuffer<T>
 {
+    private T[] _buffer;
+
+    protected int count = 0;
+    protected int start = 0;
+    protected int end = 0;
+    protected int capacity = 0;
+
     public CircularBuffer(int capacity)
     {
-        throw new NotImplementedException("You need to implement this function.");
+        this.capacity = capacity;
+        _buffer = new T[capacity];
     }
 
     public T Read()
     {
-        throw new NotImplementedException("You need to implement this function.");
+        if (count == 0)
+        {
+            throw new InvalidOperationException("No items in buffer");
+        }
+
+        var item = _buffer[start];
+        start = (start + 1) % capacity;
+        count--;
+        return item;
     }
 
     public void Write(T value)
     {
-        throw new NotImplementedException("You need to implement this function.");
+        if (count >= capacity)
+        {
+            throw new InvalidOperationException("Buffer is full");
+        }
+
+        AddToBuffer(value, false);
     }
 
     public void Overwrite(T value)
     {
-        throw new NotImplementedException("You need to implement this function.");
+        AddToBuffer(value, count >= capacity);
+    }
+
+    protected void AddToBuffer(T value, bool overwrite)
+    {
+        if (overwrite)
+        {
+            start = (start + 1) % capacity;
+        }
+        else
+        {
+            count++;
+        }
+        _buffer[end] = value;
+        end = (end + 1) % capacity;
     }
 
     public void Clear()
     {
-        throw new NotImplementedException("You need to implement this function.");
+        start = 0;
+        end = 0;
+        count = 0;
+
+        _buffer = new T[capacity];
     }
 }
