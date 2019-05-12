@@ -2,168 +2,202 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-
-public class LedgerEntry
-{
-   public LedgerEntry(DateTime date, string desc, decimal chg)
-   {
-       Date = date;
-       Desc = desc;
-       Chg = chg;
-   }
-
-   public DateTime Date { get; }
-   public string Desc { get; }
-   public decimal Chg { get; }
-}
+using System.Text;
 
 public static class Ledger
 {
-   public static LedgerEntry CreateEntry(string date, string desc, int chng)
-   {
-       return new LedgerEntry(DateTime.Parse(date, CultureInfo.InvariantCulture), desc, chng / 100.0m);
-   }
+    private static readonly LedgerService _ledgerService = new LedgerService();
+    private static readonly LedgerPrinter _ledgerPrinter = new LedgerPrinter();
 
-   private static CultureInfo CreateCulture(string cur, string loc)
-   {
-       string curSymb = null;
-       int curNeg = 0;
-       string datPat = null;
+    public static LedgerEntry CreateEntry(string date, string description, int change)
+    {
+        return new LedgerEntry(DateTime.Parse(date, CultureInfo.InvariantCulture), description, change / 100.0m);
+    }
 
-       if (cur != "USD" && cur != "EUR")
-       {
-           throw new ArgumentException("Invalid currency");
-       }
-       else
-       {
-           if (loc != "nl-NL" && loc != "en-US")
-           {
-               throw new ArgumentException("Invalid currency");
-           }
+    public static string Format(string currency, string locale, LedgerEntry[] entries)
+    {
+        var formatted = new StringBuilder();
 
-           if (cur == "USD")
-           {
-               if (loc == "en-US")
-               {
-                   curSymb = "$";
-                   datPat = "MM/dd/yyyy";
-               }
-               else if (loc == "nl-NL")
-               {
-                   curSymb = "$";
-                   curNeg = 12;
-                   datPat = "dd/MM/yyyy";
-               }
-           }
+        var ledgerCulture = _ledgerService.GetCulture(locale, currency);
 
-           if (cur == "EUR")
-           {
-               if (loc == "en-US")
-               {
-                   curSymb = "€";
-                   datPat = "MM/dd/yyyy";
-               }
-               else if (loc == "nl-NL")
-               {
-                   curSymb = "€";
-                   curNeg = 12;
-                   datPat = "dd/MM/yyyy";
-               }
-           }
-       }
+        var translations = _ledgerService.GetTranslations(locale);
 
-       var culture = new CultureInfo(loc);
-       culture.NumberFormat.CurrencySymbol = curSymb;
-       culture.NumberFormat.CurrencyNegativePattern = curNeg;
-       culture.DateTimeFormat.ShortDatePattern = datPat;
-       return culture;
-   }
+        formatted.Append(_ledgerPrinter.PrintHeader(translations));
 
-   private static string PrintHead(string loc)
-   {
-       if (loc == "en-US")
-       {
-           return "Date       | Description               | Change       ";
-       }
+        if (entries.Any())
+        {
+            var entriesForOutput = entries.GetOrderedEntries();
 
-       else
-       {
-           if (loc == "nl-NL")
-           {
-               return "Datum      | Omschrijving              | Verandering  ";
-           }
-           else
-           {
-               throw new ArgumentException("Invalid locale");
-           }
-       }
-   }
+            foreach (var entry in entriesForOutput)
+            {
+                formatted.AppendNewLine(_ledgerPrinter.PrintEntry(ledgerCulture, LedgerConstants.TruncateLength, LedgerConstants.TruncateSuffix, entry));
+            }
+        }
 
-   private static string Date(IFormatProvider culture, DateTime date) => date.ToString("d", culture);
-
-   private static string Description(string desc)
-   {
-       if (desc.Length > 25)
-       {
-           var trunc = desc.Substring(0, 22);
-           trunc += "...";
-           return trunc;
-       }
-
-       return desc;
-   }
-
-   private static string Change(IFormatProvider culture, decimal cgh)
-   {
-       return cgh < 0.0m ? cgh.ToString("C", culture) : cgh.ToString("C", culture) + " ";
-   }
-
-   private static string PrintEntry(IFormatProvider culture, LedgerEntry entry)
-   {
-       var formatted = "";
-       var date = Date(culture, entry.Date);
-       var description = Description(entry.Desc);
-       var change = Change(culture, entry.Chg);
-
-       formatted += date;
-       formatted += " | ";
-       formatted += string.Format("{0,-25}", description);
-       formatted += " | ";
-       formatted += string.Format("{0,13}", change);
-
-       return formatted;
-   }
-
-
-   private static IEnumerable<LedgerEntry> sort(LedgerEntry[] entries)
-   {
-       var neg = entries.Where(e => e.Chg < 0).OrderBy(x => x.Date + "@" + x.Desc + "@" + x.Chg);
-       var post = entries.Where(e => e.Chg >= 0).OrderBy(x => x.Date + "@" + x.Desc + "@" + x.Chg);
-
-       var result = new List<LedgerEntry>();
-       result.AddRange(neg);
-       result.AddRange(post);
-
-       return result;
-   }
-
-   public static string Format(string currency, string locale, LedgerEntry[] entries)
-   {
-       var formatted = "";
-       formatted += PrintHead(locale);
-
-       var culture = CreateCulture(currency, locale);
-
-       if (entries.Length > 0)
-       {
-           var entriesForOutput = sort(entries);
-
-           for (var i = 0; i < entriesForOutput.Count(); i++)
-           {
-               formatted += "\n" + PrintEntry(culture, entriesForOutput.Skip(i).First());
-           }
-       }
-
-       return formatted;
-   }
+        return formatted.ToString();
+    }
 }
+
+public static class LedgerConstants
+{
+    public const int TruncateLength = 25;
+    public const string TruncateSuffix = "...";
+}
+
+public static class LedgerExtensions
+{
+    public static string Truncate(this string input, int maxLength, string suffix)
+    {
+        return input.Length > maxLength ? $"{input.Substring(0, maxLength - suffix.Length)}{suffix}" : input;
+    }
+
+    public static IEnumerable<LedgerEntry> GetOrderedEntries(this LedgerEntry[] entries) => entries
+        .OrderBy(x => x.Date)
+        .ThenBy(x => x.Description)
+        .ThenBy(x => x.Change);
+
+    public static string FormattedChange(this decimal change, IFormatProvider culture) => $"{change.ToString("C", culture)}{(change < 0.0M ? "" : " ")}";
+
+    public static StringBuilder AppendNewLine(this StringBuilder stringBuilder, string value) => stringBuilder.Append($"\n{value}");
+
+    public static string ToLedgerDate(this DateTime date, IFormatProvider culture) => date.ToString("d", culture);
+}
+
+public class LedgerEntry
+{
+    public LedgerEntry(DateTime date, string desc, decimal chg)
+    {
+        Date = date;
+        Description = desc;
+        Change = chg;
+    }
+
+    public DateTime Date { get; }
+    public string Description { get; }
+    public decimal Change { get; }
+}
+
+public class LedgerCulture
+{
+    public string Name { get; set; }
+    public int CurrencyNegativePattern { get; set; }
+    public string ShortDatePattern { get; set; }
+    public LedgerTranslation Translations { get; set; }
+
+    public LedgerCulture(string name, int currencyNegativePattern, string shortDatePattern)
+    {
+        Name = name;
+        CurrencyNegativePattern = currencyNegativePattern;
+        ShortDatePattern = shortDatePattern;
+    }
+}
+
+public class LedgerTranslation
+{
+    public string Date { get; set; }
+    public string Description { get; set; }
+    public string Change { get; set; }
+}
+
+/// <summary>
+/// Responsible for all culture and currency related functionality
+/// </summary>
+public class LedgerService
+{
+    /// <summary>
+    /// Valid Currencies 
+    /// </summary>
+    private static readonly Dictionary<string, string> _validCurrencies = new Dictionary<string, string>()
+    {
+        ["EUR"] = "€",
+        ["USD"] = "$"
+    };
+
+    /// <summary>
+    /// Valid Cultures
+    /// </summary>
+    private static readonly List<LedgerCulture> _validCulures = new List<LedgerCulture>()
+    {
+        new LedgerCulture("en-US", 0, "MM/dd/yyyy")
+        {
+            Translations = new LedgerTranslation()
+            {
+                Date = "Date",
+                Description = "Description",
+                Change = "Change"
+            }
+        },
+        new LedgerCulture("nl-NL", 12, "dd/MM/yyyy")
+        {
+            Translations = new LedgerTranslation()
+            {
+                Date = "Datum",
+                Description = "Omschrijving",
+                Change = "Verandering"
+            }
+        }
+    };
+
+    public LedgerTranslation GetTranslations(string name)
+    {
+        var ledgerCulture = _validCulures.FirstOrDefault(n => n.Name == name);
+        if (ledgerCulture == null)
+        {
+            throw new ArgumentException("Invalid culture");
+        }
+
+        return ledgerCulture.Translations;
+    }
+
+    public CultureInfo GetCulture(string name, string currency)
+    {
+        var ledgerCulture = _validCulures.FirstOrDefault(n => n.Name == name);
+        if (ledgerCulture == null)
+        {
+            throw new ArgumentException("Invalid culture");
+        }
+
+        if (!_validCurrencies.ContainsKey(currency))
+        {
+            throw new ArgumentException("Invalid currency");
+        }
+
+        return new CultureInfo(ledgerCulture.Name)
+        {
+            NumberFormat =
+            {
+                CurrencySymbol = _validCurrencies[currency],
+                CurrencyNegativePattern = ledgerCulture.CurrencyNegativePattern
+            },
+            DateTimeFormat =
+            {
+                ShortDatePattern = ledgerCulture.ShortDatePattern
+            }
+        };
+    }
+}
+
+/// <summary>
+/// Responsible for printing
+/// </summary>
+public class LedgerPrinter
+{
+    public string PrintHeader(LedgerTranslation translation)
+    {
+        var cellDate = translation.Date;
+        var cellDescription = translation.Description;
+        var cellChange = translation.Change;
+
+        return $"{cellDate.PadRight(11)}| {cellDescription.PadRight(26)}| {cellChange.PadRight(13)}";
+    }
+
+    public string PrintEntry(IFormatProvider culture, int truncateLenth, string truncateSuffix, LedgerEntry entry)
+    {
+        var date = entry.Date.ToLedgerDate(culture);
+        var description = entry.Description.Truncate(truncateLenth, truncateSuffix);
+        var change = entry.Change.FormattedChange(culture);
+
+        return $"{date.PadRight(11)}| {description.PadRight(26)}| {change.PadLeft(13)}";
+    }
+}
+
